@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>木蘭的英雄之旅</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Noto Serif TC', serif;
+            background-color: #f3e5d8; /* 紙張質感背景色 */
+            overflow-x: hidden; /* 防止特效超出畫面邊界造成水平卷軸閃動 */
+        }
+
+        /* 地圖容器，保持比例 */
+        .map-container {
+            position: relative;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            border: 8px solid #5d4037;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            overflow: hidden;
+            background-color: #eaddcf;
+        }
+
+        .map-image {
+            width: 100%;
+            height: auto;
+            display: block;
+            pointer-events: none; /* 讓點擊穿透圖片 */
+        }
+
+        /* 地點標記點 */
+        .location-dot {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background-color: rgba(185, 28, 28, 0.6);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            cursor: pointer;
+        }
+
+        /* 使用虛擬元素與 transform 來做動畫，效能更好且不會閃爍 */
+        .location-dot::after {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border-radius: 50%;
+            border: 2px solid rgba(185, 28, 28, 0.8);
+            animation: pulse 2s infinite;
+            pointer-events: none;
+        }
+
+        .location-label {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.8rem;
+            white-space: nowrap;
+            color: #4a3b32;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .location-dot:hover .location-label {
+            opacity: 1;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+
+        /* 木蘭角色標記 */
+        #hero-token {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            font-size: 40px;
+            text-align: center;
+            line-height: 60px;
+            transform: translate(-50%, -60%) translateZ(0); /* 加入 translateZ(0) 啟用硬體加速 */
+            z-index: 20;
+            transition: left 1.5s ease-in-out, top 1.5s ease-in-out; /* 避免使用 all，防止 Emoji 替換時閃爍 */
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+            will-change: left, top; /* 提示瀏覽器優化 */
+        }
+
+        /* 對話框樣式 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: #fffbf0;
+            background-image: linear-gradient(#e8e0d5 1px, transparent 1px), linear-gradient(90deg, #e8e0d5 1px, transparent 1px);
+            background-size: 20px 20px;
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            border: 4px double #8b5a2b;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+            position: relative;
+        }
+
+        .option-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background-color: #f5f5f5;
+            border: 2px solid #d4c5b0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1.1rem;
+            color: #444;
+        }
+
+        .option-btn:hover {
+            background-color: #e6dccf;
+            border-color: #8b5a2b;
+        }
+
+        .option-btn.correct {
+            background-color: #d1fae5;
+            border-color: #059669;
+            color: #065f46;
+        }
+
+        .option-btn.wrong {
+            background-color: #fee2e2;
+            border-color: #dc2626;
+            color: #991b1b;
+        }
+        
+        /* 勝利畫面特效 */
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            animation: fall linear forwards;
+        }
+        
+        @keyframes fall {
+            to { transform: translateY(100vh) rotate(720deg); }
+        }
+
+        /* 新增的樣式：愛心與解說區 */
+        .heart-icon {
+            transition: all 0.3s ease;
+        }
+        .heart-lost {
+            filter: grayscale(100%);
+            opacity: 0.3;
+            transform: scale(0.8);
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+    </style>
+</head>
+<body class="min-h-screen p-4 flex flex-col items-center">
+
+    <header class="text-center mb-6">
+        <h1 class="text-4xl font-bold text-amber-900 mb-2">木蘭的英雄之旅</h1>
+        <p class="text-stone-600 text-lg">回答問題，協助木蘭完成代父從軍的使命並榮歸故里</p>
+    </header>
+
+    <!-- 背景音樂 -->
+    <audio id="bg-music" loop>
+        <source src="木蘭出征.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- 音樂控制按鈕 -->
+    <button id="music-toggle-btn" onclick="toggleMusic()" class="fixed bottom-6 right-6 bg-amber-700 text-white p-3 rounded-full shadow-lg hover:bg-amber-800 transition z-50 flex items-center justify-center w-12 h-12 text-xl" title="切換音樂">
+        🔇
+    </button>
+
+    <!-- 生命值 (愛心) 顯示區 -->
+    <div id="hearts-container" class="fixed top-4 right-6 text-3xl z-50 flex gap-1 bg-white/80 px-3 py-1 rounded-full shadow-md border-2 border-amber-200">
+        <span class="heart-icon">❤️</span>
+        <span class="heart-icon">❤️</span>
+        <span class="heart-icon">❤️</span>
+    </div>
+
+    <!-- 開場影片 Overlay (獨立於開始按鈕之前) -->
+    <div id="video-overlay" class="modal-overlay active">
+        <div class="modal-content relative bg-black p-0 border-none max-w-4xl w-full overflow-hidden">
+            <button onclick="skipVideo()" class="absolute top-4 right-4 bg-white/30 hover:bg-white/50 text-white px-4 py-2 rounded-lg z-50 transition">跳過影片 ⏭️</button>
+            <video id="intro-video" class="w-full h-auto" controls playsinline>
+                <source src="木蘭的英雄之旅影片.mp4" type="video/mp4">
+                您的瀏覽器不支援影片播放。
+            </video>
+            <!-- 若瀏覽器阻擋自動播放，顯示此播放按鈕 -->
+            <div id="play-video-btn-overlay" class="absolute inset-0 flex justify-center items-center bg-black/60 hidden z-40">
+                <button onclick="playIntroVideo()" class="bg-amber-700 text-white text-2xl font-bold px-8 py-4 rounded-full hover:bg-amber-800 transition shadow-lg">▶️ 播放開場影片</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 開始旅程 Modal -->
+    <div id="start-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="text-6xl mb-4">📜</div>
+            <h3 class="text-3xl font-bold text-amber-900 mb-4">準備出發！</h3>
+            <p class="text-lg text-gray-700 mb-6">點擊下方按鈕開始問答。每個地點有兩道題目。<br>答錯將扣除愛心，失去三顆心則旅程失敗！</p>
+            <button onclick="startGameFlow()" class="bg-amber-700 text-white px-8 py-3 rounded-lg hover:bg-amber-800 transition text-xl font-bold w-full">開始旅程</button>
+        </div>
+    </div>
+
+    <!-- 遊戲主區域 -->
+    <div class="map-container" id="map-container">
+        <!-- 背景地圖：請確保圖片名稱為 '木蘭詩地圖.jpg' -->
+        <img src="木蘭詩地圖.jpg" alt="木蘭詩地圖" class="map-image" id="game-map" onerror="this.src='https://via.placeholder.com/1200x600/eaddcf/8b5a2b?text=Map+Image+Not+Found';">
+        
+        <!-- 路線 SVG -->
+        <svg id="route-svg" class="absolute top-0 left-0 w-full h-full pointer-events-none" style="z-index: 5;"></svg>
+
+        <!-- 角色 Token -->
+        <div id="hero-token">👧</div>
+
+        <!-- 地點標記將由 JS 動態生成 -->
+        <div id="locations-layer"></div>
+    </div>
+
+    <div class="mt-6 text-center">
+        <div class="bg-amber-100 border border-amber-300 rounded-lg p-4 inline-block shadow-md">
+            <span class="font-bold text-amber-900">當前位置：</span>
+            <span id="current-location-name" class="text-lg text-amber-800">準備出發</span>
+        </div>
+        <div class="mt-2 text-stone-500 text-sm">
+            <button onclick="resetGame()" class="underline hover:text-stone-800">重新開始</button>
+        </div>
+    </div>
+
+    <!-- 題目 Modal (修改以支援解說與兩道題) -->
+    <div id="quiz-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="quiz-title" class="text-2xl font-bold text-amber-900">題目</h3>
+                <span id="quiz-progress" class="text-sm font-bold text-stone-500 bg-stone-200 px-2 py-1 rounded">1/2</span>
+            </div>
+            <p id="quiz-question" class="text-lg text-gray-800 mb-6 font-medium">這裡會顯示問題內容...</p>
+            <div id="quiz-options">
+                <!-- 選項會動態插入這裡 -->
+            </div>
+            
+            <!-- 答題後的解說區塊 -->
+            <div id="feedback-area" class="hidden mt-4 pt-4 border-t-2 border-amber-200 text-left animate-fade-in">
+                <p id="feedback-msg" class="text-xl font-bold mb-2"></p>
+                <div class="bg-amber-50 p-3 rounded border border-amber-200 mb-4">
+                    <span class="font-bold text-amber-800 text-sm mb-1 block">💡 解析：</span>
+                    <p id="feedback-explanation" class="text-gray-700 text-sm leading-relaxed"></p>
+                </div>
+                <button id="next-action-btn" class="w-full bg-amber-700 text-white py-3 rounded-lg hover:bg-amber-800 transition font-bold text-lg">繼續</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 遊戲失敗 Modal -->
+    <div id="game-over-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="text-6xl mb-4">💔</div>
+            <h3 class="text-3xl font-bold text-red-800 mb-4">旅程失敗</h3>
+            <p class="text-lg text-gray-700 mb-6 leading-relaxed">
+                木蘭耗盡了體力，無法繼續完成使命...<br>
+                請養精蓄銳後再試一次！
+            </p>
+            <button onclick="resetGame()" class="bg-stone-700 text-white px-6 py-2 rounded-lg hover:bg-stone-800 transition">重新挑戰</button>
+        </div>
+    </div>
+
+    <!-- 結局 Modal -->
+    <div id="end-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="text-6xl mb-4">🎆🐇🎆</div>
+            <h3 class="text-3xl font-bold text-red-800 mb-4">歡迎回家！</h3>
+            <p class="text-lg text-gray-700 mb-6 leading-relaxed">
+                木蘭脫下了戰袍，穿回了舊時裳。<br>
+                看著窗外，夥伴們都驚呆了！<br>
+                恭喜你完成了這趟英雄之旅！
+            </p>
+            <button onclick="resetGame()" class="bg-amber-700 text-white px-6 py-2 rounded-lg hover:bg-amber-800 transition">再次挑戰</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 音效系統 (Web Audio API) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            if (type === 'correct') {
+                // 答對音效：清脆的叮咚聲
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+                oscillator.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1); // A5
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.4);
+            } else if (type === 'wrong') {
+                // 答錯音效：低沉的嗶聲
+                oscillator.type = 'sawtooth';
+                oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.3);
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.4);
+            }
+        }
+
+        // --- 遊戲資料設定 ---
+        const locations = [
+            { 
+                id: 0, 
+                name: "花家 (出發)", 
+                x: 80, y: 65,
+                icon: "🏡",
+                questions: [
+                    {
+                        text: "「唧唧復唧唧，木蘭當戶織。」請問這兩句是在描寫什麼聲音？",
+                        options: ["木蘭嘆息的聲音", "織布機織布的聲音", "蟲鳴鳥叫的聲音", "門戶開關的聲音"],
+                        correct: 1,
+                        explanation: "「唧唧」是模擬織布機運作時發出的聲音，帶出木蘭正在織布的日常情境。"
+                    },
+                    {
+                        text: "木蘭決定代父從軍的主要原因是什麼？",
+                        options: ["渴望建功立業，追求將帥榮耀", "阿爺無大兒，木蘭無長兄", "嚮往邊疆風光，渴望遊歷四方", "受到地方逼迫，無奈服役當兵"],
+                        correct: 1,
+                        explanation: "詩中提到「阿爺無大兒，木蘭無長兄」，因可汗大點兵，父親年邁又無長子，木蘭才決定挺身而出。"
+                    }
+                ]
+            },
+            { 
+                id: 1, 
+                name: "黃河", 
+                x: 45, y: 55,
+                icon: "🌊",
+                questions: [
+                    {
+                        text: "木蘭在黃河邊露營時，聽到了什麼聲音？",
+                        options: ["爺孃喚女聲", "黃河流水鳴濺濺", "燕山胡騎鳴啾啾", "夥伴的呼嚕聲"],
+                        correct: 1,
+                        explanation: "「不聞爺孃喚女聲，但聞黃河流水鳴濺濺」，到了黃河邊已經聽不到父母的聲音，只剩下水流聲。"
+                    },
+                    {
+                        text: "「旦辭爺孃去，暮宿黃河邊」這兩句展現了什麼？",
+                        options: ["行軍速度極快", "迷路了", "沿途風景優美", "木蘭不想離開"],
+                        correct: 0,
+                        explanation: "早上才辭別父母出發，晚上就抵達了黃河邊，展現了軍情緊急與行軍神速。"
+                    }
+                ]
+            },
+            { 
+                id: 2, 
+                name: "黑山頭", 
+                x: 25, y: 30,
+                icon: "⛰️",
+                questions: [
+                    {
+                        text: "到了黑山頭，木蘭聽到了「燕山胡騎鳴啾啾」。這反映了什麼情境？",
+                        options: ["戰場的肅殺，以及離家的孤寂", "看見敵方的戰馬，內心很興奮", "欣賞邊疆的風光，覺得很優美", "渴望騎乘著戰馬，在沙場馳騁"],
+                        correct: 0,
+                        explanation: "聽見敵方戰馬的嘶鳴聲，不僅點出邊疆戰場的肅殺氣氛，也襯托出木蘭離家越來越遠的孤寂感。"
+                    },
+                    {
+                        text: "「萬里赴戎機，關山度若飛」使用了什麼修辭技巧？",
+                        options: ["擬人", "誇飾", "借代", "映襯"],
+                        correct: 1,
+                        explanation: "「若飛」是誇飾法（兼譬喻），極度誇張地形容行軍速度極快，宛如飛越重重關山。"
+                    }
+                ]
+            },
+            { 
+                id: 3, 
+                name: "匈奴戰場", 
+                x: 60, y: 15,
+                icon: "⚔️",
+                questions: [
+                    {
+                        text: "「將軍百戰死，壯士十年歸」使用了什麼修辭技巧？",
+                        options: ["譬喻", "誇飾", "互文", "轉化"],
+                        correct: 2,
+                        explanation: "這是「互文」修辭，意指將士們經歷了十多年無數場戰役，有些人戰死沙場，有些人幸運歸來。"
+                    },
+                    {
+                        text: "「朔氣傳金柝，寒光照鐵衣」主要描寫了什麼情境？",
+                        options: ["勝利的喜悅", "邊塞苦寒的軍營生活", "皇帝的賞賜", "家鄉的溫暖"],
+                        correct: 1,
+                        explanation: "北方的寒氣傳來打更的聲音，月光照在冰冷的鎧甲上，生動描寫了邊疆軍營生活的艱辛與苦寒。"
+                    }
+                ]
+            },
+            { 
+                id: 4, 
+                name: "皇宮", 
+                x: 10, y: 60,
+                icon: "👑",
+                questions: [
+                    {
+                        text: "天子問木蘭想要什麼賞賜，木蘭的回答是？",
+                        options: ["尚書郎的高官", "千金萬銀", "願借明駝千里足，送兒還故鄉", "想要一把尚方寶劍"],
+                        correct: 2,
+                        explanation: "木蘭「不用尚書郎」，她拒絕了高官厚祿，只希望能借一匹好馬盡快回到故鄉。"
+                    },
+                    {
+                        text: "「歸來見天子，天子坐明堂」這兩句詩，主要在描寫什麼情境？",
+                        options: ["木蘭凱旋歸來，覲見天子接受封賞", "木蘭打了敗仗，被帶到大堂上受審", "天子親自出城，迎接木蘭並請上座", "木蘭皇宮迷路，無意間看見了天子"],
+                        correct: 0,
+                        explanation: "「歸來見天子，天子坐明堂」描寫木蘭立下戰功凱旋歸來，在明亮的朝堂上覲見天子，準備接受論功行賞。"
+                    }
+                ]
+            },
+            { 
+                id: 5, 
+                name: "花家 (歸來)", 
+                x: 80, y: 65,
+                icon: "🐇",
+                questions: [
+                    {
+                        text: "當木蘭回到家「脫我戰時袍，著我舊時裳」並出門看夥伴時，夥伴們的反應是什麼？",
+                        options: ["覺得木蘭變漂亮了", "皆驚惶，不知木蘭是女郎", "覺得木蘭衣服很奇怪", "早就知道她是女生了"],
+                        correct: 1,
+                        explanation: "詩中提到「出門看火伴，火伴皆驚惶：同行十二年，不知木蘭是女郎」，表現出夥伴們極度驚訝的樣子。"
+                    },
+                    {
+                        text: "詩的最後以「雙兔傍地走，安能辨我是雄雌」作結，這句話的用意是什麼？",
+                        options: ["說明兔子跑得很快", "描述木蘭喜歡養兔子", "暗示男女在能力上並無絕對差異", "說明戰場上有很多野兔"],
+                        correct: 2,
+                        explanation: "藉由兔子奔跑時難以分辨雌雄，巧妙地比喻在戰場上保家衛國時，女性的表現與能力完全不輸給男性。"
+                    }
+                ]
+            }
+        ];
+
+        // --- 遊戲狀態 ---
+        let currentStep = 0;
+        let currentQuestionIndex = 0; // 0 代表第一題, 1 代表第二題
+        let lives = 3;
+
+        // --- DOM 元素 ---
+        const mapContainer = document.getElementById('map-container');
+        const heroToken = document.getElementById('hero-token');
+        const locationsLayer = document.getElementById('locations-layer');
+        const quizModal = document.getElementById('quiz-modal');
+        const endModal = document.getElementById('end-modal');
+        const startModal = document.getElementById('start-modal');
+        const gameOverModal = document.getElementById('game-over-modal');
+        const locationNameDisplay = document.getElementById('current-location-name');
+        
+        // 影片、音樂與 UI 更新元素
+        const bgMusic = document.getElementById('bg-music');
+        const musicToggleBtn = document.getElementById('music-toggle-btn');
+        let isMusicPlaying = false;
+        
+        const videoOverlay = document.getElementById('video-overlay');
+        const introVideo = document.getElementById('intro-video');
+        const playVideoBtnOverlay = document.getElementById('play-video-btn-overlay');
+
+        const heartsContainer = document.getElementById('hearts-container');
+        const feedbackArea = document.getElementById('feedback-area');
+        const nextActionBtn = document.getElementById('next-action-btn');
+
+        // --- 初始化 ---
+        function initGame() {
+            renderLocations();
+            updateHeartsUI();
+            updateHeroPosition(0, true); // true 代表初始靜默放置，不觸發題目
+            
+            // 顯示影片並嘗試自動播放
+            videoOverlay.classList.add('active');
+            startModal.classList.remove('active');
+            
+            const playPromise = introVideo.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(err => {
+                    console.log("自動播放影片被瀏覽器阻擋", err);
+                    playVideoBtnOverlay.classList.remove('hidden');
+                });
+            }
+            
+            // 監聽影片播放與結束事件
+            introVideo.onplay = () => playVideoBtnOverlay.classList.add('hidden');
+            introVideo.onended = () => showStartModal();
+        }
+
+        // 手動觸發影片播放
+        function playIntroVideo() {
+            playVideoBtnOverlay.classList.add('hidden');
+            introVideo.play();
+        }
+
+        // 跳過影片或影片結束後觸發，顯示開始旅程按鈕
+        function skipVideo() {
+            introVideo.pause();
+            showStartModal();
+        }
+
+        // 顯示開始旅程按鈕的 Modal
+        function showStartModal() {
+            videoOverlay.classList.remove('active');
+            startModal.classList.add('active');
+        }
+
+        // 開始旅程按鈕觸發
+        function startGameFlow() {
+            // 喚醒 AudioContext，符合瀏覽器的音訊播放規定
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            startModal.classList.remove('active');
+            
+            // 播放背景音樂
+            bgMusic.volume = 0.4; // 設定背景音量，避免太吵蓋過答題特效音
+            bgMusic.play().then(() => {
+                isMusicPlaying = true;
+                musicToggleBtn.innerText = "🎵";
+            }).catch(err => {
+                console.log("自動播放音樂被瀏覽器阻擋", err);
+            });
+
+            // 開始問答第一關
+            setTimeout(() => {
+                showQuestion(0, 0);
+            }, 500);
+        }
+
+        // 更新生命值 UI
+        function updateHeartsUI() {
+            const hearts = heartsContainer.querySelectorAll('.heart-icon');
+            hearts.forEach((heart, index) => {
+                if (index < lives) {
+                    heart.classList.remove('heart-lost');
+                } else {
+                    heart.classList.add('heart-lost');
+                }
+            });
+        }
+
+        // 繪製地圖上的點
+        function renderLocations() {
+            locationsLayer.innerHTML = '';
+            locations.forEach((loc, index) => {
+                const dot = document.createElement('div');
+                dot.className = 'location-dot';
+                dot.style.left = loc.x + '%';
+                dot.style.top = loc.y + '%';
+                
+                const label = document.createElement('div');
+                label.className = 'location-label';
+                label.innerText = loc.name;
+                dot.appendChild(label);
+                locationsLayer.appendChild(dot);
+            });
+        }
+
+        // 更新主角位置
+        function updateHeroPosition(stepIndex, isInit = false) {
+            const loc = locations[stepIndex];
+            heroToken.style.left = loc.x + '%';
+            heroToken.style.top = loc.y + '%';
+            
+            if (stepIndex === 0) heroToken.innerText = "👧"; 
+            else if (stepIndex >= 1 && stepIndex <= 3) heroToken.innerText = "🏇"; 
+            else if (stepIndex === 4) heroToken.innerText = "🙇"; 
+            else if (stepIndex === 5) heroToken.innerText = "🐫"; 
+
+            locationNameDisplay.innerText = loc.name;
+
+            if (!isInit) {
+                // 移動動畫結束後觸發事件
+                if (stepIndex > 0 && stepIndex <= locations.length - 1) {
+                    setTimeout(() => {
+                        showQuestion(stepIndex, 0); // 抵達新地點，顯示第一題
+                    }, 1600); 
+                }
+            }
+        }
+
+        // 顯示題目
+        function showQuestion(stepIdx, qIdx) {
+            currentStep = stepIdx;
+            currentQuestionIndex = qIdx;
+            
+            const qData = locations[stepIdx].questions[qIdx];
+            if (!qData) return;
+
+            document.getElementById('quiz-title').innerText = `關卡：${locations[stepIdx].name}`;
+            document.getElementById('quiz-progress').innerText = `第 ${qIdx + 1} / 2 題`;
+            document.getElementById('quiz-question').innerText = qData.text;
+            
+            const optionsDiv = document.getElementById('quiz-options');
+            optionsDiv.innerHTML = '';
+            
+            // 隱藏解說區
+            feedbackArea.classList.add('hidden');
+
+            qData.options.forEach((opt, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerText = opt;
+                btn.onclick = () => checkAnswer(i, qData.correct, qData.explanation, btn);
+                optionsDiv.appendChild(btn);
+            });
+
+            quizModal.classList.add('active');
+        }
+
+        // 檢查答案
+        function checkAnswer(selected, correct, explanation, btnElement) {
+            const allBtns = document.querySelectorAll('.option-btn');
+            allBtns.forEach(b => {
+                b.disabled = true;
+                b.style.pointerEvents = 'none'; // 停用 hover 效果，防止再次點擊
+            });
+
+            const feedbackMsg = document.getElementById('feedback-msg');
+            const feedbackExp = document.getElementById('feedback-explanation');
+            
+            // 顯示正確答案的按鈕樣式
+            allBtns[correct].classList.add('correct');
+
+            if (selected === correct) {
+                playSound('correct');
+                feedbackMsg.innerText = "🎉 答對了！";
+                feedbackMsg.className = "text-xl font-bold mb-2 text-green-600";
+            } else {
+                playSound('wrong');
+                btnElement.classList.add('wrong');
+                feedbackMsg.innerText = "❌ 答錯了！";
+                feedbackMsg.className = "text-xl font-bold mb-2 text-red-600";
+                
+                // 扣除愛心
+                lives--;
+                updateHeartsUI();
+            }
+
+            // 填入解說
+            feedbackExp.innerText = explanation;
+            
+            // 處理繼續按鈕的邏輯
+            if (lives <= 0) {
+                nextActionBtn.innerText = "遊戲結束";
+                nextActionBtn.onclick = () => {
+                    quizModal.classList.remove('active');
+                    gameOverModal.classList.add('active');
+                };
+            } else {
+                if (currentQuestionIndex === 0) {
+                    nextActionBtn.innerText = "下一題";
+                    nextActionBtn.onclick = () => showQuestion(currentStep, 1);
+                } else {
+                    if (currentStep === locations.length - 1) {
+                        nextActionBtn.innerText = "完成旅程";
+                        nextActionBtn.onclick = () => {
+                            quizModal.classList.remove('active');
+                            showEnding();
+                        };
+                    } else {
+                        nextActionBtn.innerText = "繼續前進";
+                        nextActionBtn.onclick = () => {
+                            quizModal.classList.remove('active');
+                            nextStep();
+                        };
+                    }
+                }
+            }
+
+            // 顯示解說區塊
+            feedbackArea.classList.remove('hidden');
+        }
+
+        function nextStep() {
+            if (currentStep < locations.length - 1) {
+                currentStep++;
+                updateHeroPosition(currentStep);
+            }
+        }
+
+        function showEnding() {
+            endModal.classList.add('active');
+            createConfetti();
+        }
+
+        // 控制音樂開關
+        function toggleMusic() {
+            if (isMusicPlaying) {
+                bgMusic.pause();
+                musicToggleBtn.innerText = "🔇";
+            } else {
+                bgMusic.play();
+                musicToggleBtn.innerText = "🎵";
+            }
+            isMusicPlaying = !isMusicPlaying;
+        }
+
+        function resetGame() {
+            currentStep = 0;
+            currentQuestionIndex = 0;
+            lives = 3;
+            updateHeartsUI();
+            
+            // 停止並重置背景音樂與控制按鈕
+            bgMusic.pause();
+            bgMusic.currentTime = 0;
+            isMusicPlaying = false;
+            musicToggleBtn.innerText = "🔇";
+            
+            // 重置影片時間與狀態
+            introVideo.pause();
+            introVideo.currentTime = 0;
+            
+            endModal.classList.remove('active');
+            gameOverModal.classList.remove('active');
+            quizModal.classList.remove('active');
+            
+            updateHeroPosition(0, true);
+            
+            // 重置後顯示影片畫面，嘗試自動播放
+            videoOverlay.classList.add('active');
+            startModal.classList.remove('active');
+            const playPromise = introVideo.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(err => {
+                    playVideoBtnOverlay.classList.remove('hidden');
+                });
+            }
+        }
+
+        // 簡單的慶祝特效
+        function createConfetti() {
+            const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff'];
+            for (let i = 0; i < 50; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = Math.random() * 100 + 'vw';
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.animationDuration = (Math.random() * 3 + 2) + 's';
+                document.body.appendChild(confetti);
+                
+                setTimeout(() => confetti.remove(), 5000);
+            }
+        }
+
+        // 啟動
+        window.onload = initGame;
+
+    </script>
+</body>
+</html>
