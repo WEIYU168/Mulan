@@ -87,19 +87,54 @@
             100% { transform: scale(2.5); opacity: 0; }
         }
 
-        /* 木蘭角色標記 */
+        /* 木蘭角色標記 (圖片容器) */
         #hero-token {
             position: absolute;
-            width: 60px;
-            height: 60px;
-            font-size: 40px;
-            text-align: center;
-            line-height: 60px;
+            width: 120px;
+            height: 120px;
             transform: translate(-50%, -60%) translateZ(0); /* 加入 translateZ(0) 啟用硬體加速 */
             z-index: 20;
-            transition: left 1.5s ease-in-out, top 1.5s ease-in-out; /* 避免使用 all，防止 Emoji 替換時閃爍 */
-            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+            transition: left 1.5s ease-in-out, top 1.5s ease-in-out; 
             will-change: left, top; /* 提示瀏覽器優化 */
+        }
+
+        /* 實際載入的圖片樣式 (古典畫框) */
+        .token-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 6px solid #b8860b; /* 暗金色古典邊框 */
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            background-color: #f3e5d8;
+        }
+
+        /* 找不到圖片時的備用玉珮樣式 */
+        .jade-token {
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 30% 30%, #eef5e9, #b9d8c2, #7a9e85);
+            border-radius: 50%;
+            border: 6px solid #b8860b;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5), inset 0 0 15px rgba(255,255,255,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 3.5rem;
+            color: #2d4a36;
+            text-shadow: 1px 1px 2px rgba(255,255,255,0.9);
+            position: relative;
+            font-family: 'Noto Serif TC', serif;
+            font-weight: bold;
+        }
+
+        .jade-token::after {
+            content: '';
+            position: absolute;
+            top: 6px; left: 6px; right: 6px; bottom: 6px;
+            border: 2px dotted #54735e;
+            border-radius: 50%;
+            opacity: 0.6;
         }
 
         /* 對話框樣式 */
@@ -122,6 +157,11 @@
         .modal-overlay.active {
             opacity: 1;
             pointer-events: auto;
+        }
+
+        /* 針對問答框，移除灰暗背景，讓地圖保持清晰 */
+        #quiz-modal {
+            background: transparent;
         }
 
         .modal-content {
@@ -258,8 +298,8 @@
         <!-- 路線 SVG -->
         <svg id="route-svg" class="absolute top-0 left-0 w-full h-full pointer-events-none" style="z-index: 5;"></svg>
 
-        <!-- 角色 Token -->
-        <div id="hero-token">👧</div>
+        <!-- 角色 Token (由JS動態注入圖片或玉珮) -->
+        <div id="hero-token"></div>
 
         <!-- 地點標記將由 JS 動態生成 -->
         <div id="locations-layer"></div>
@@ -275,7 +315,7 @@
         </div>
     </div>
 
-    <!-- 題目 Modal (修改以支援解說與兩道題) -->
+    <!-- 題目 Modal -->
     <div id="quiz-modal" class="modal-overlay">
         <div class="modal-content">
             <div class="flex justify-between items-center mb-4">
@@ -323,6 +363,11 @@
                 恭喜你完成了這趟英雄之旅！
             </p>
             <button onclick="resetGame()" class="bg-amber-700 text-white px-6 py-2 rounded-lg hover:bg-amber-800 transition">再次挑戰</button>
+            
+            <!-- 製作團隊資訊 -->
+            <div class="mt-6 pt-4 border-t border-amber-200 text-sm text-amber-800 font-bold tracking-widest">
+                林威宇老師 X 南一書局 製作
+            </div>
         </div>
     </div>
 
@@ -341,7 +386,7 @@
             gainNode.connect(audioCtx.destination);
             
             if (type === 'correct') {
-                // 答對音效：清脆的叮咚聲
+                // 答對音效
                 oscillator.type = 'sine';
                 oscillator.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
                 oscillator.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1); // A5
@@ -350,7 +395,7 @@
                 oscillator.start();
                 oscillator.stop(audioCtx.currentTime + 0.4);
             } else if (type === 'wrong') {
-                // 答錯音效：低沉的嗶聲
+                // 答錯音效
                 oscillator.type = 'sawtooth';
                 oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
                 oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.3);
@@ -361,13 +406,53 @@
             }
         }
 
+        // --- 行進馬蹄聲效 ---
+        function playGallopSound() {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const duration = 1.5; 
+            const startTime = audioCtx.currentTime;
+            let t = startTime;
+            
+            while (t < startTime + duration) {
+                createHoofBeat(t);
+                if (t + 0.15 < startTime + duration) createHoofBeat(t + 0.15);
+                t += 0.4; 
+            }
+        }
+
+        function createHoofBeat(time) {
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(250, time);
+            osc.frequency.exponentialRampToValueAtTime(50, time + 0.05);
+
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(800, time);
+            filter.frequency.exponentialRampToValueAtTime(100, time + 0.05);
+
+            gainNode.gain.setValueAtTime(0, time);
+            gainNode.gain.linearRampToValueAtTime(0.3, time + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+
+            osc.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            osc.start(time);
+            osc.stop(time + 0.06);
+        }
+
         // --- 遊戲資料設定 ---
         const locations = [
             { 
                 id: 0, 
                 name: "花家 (出發)", 
                 x: 80, y: 65,
-                icon: "🏡",
                 questions: [
                     {
                         text: "「唧唧復唧唧，木蘭當戶織。」請問這兩句是在描寫什麼聲音？",
@@ -387,10 +472,9 @@
                 id: 1, 
                 name: "黃河", 
                 x: 45, y: 55,
-                icon: "🌊",
                 questions: [
                     {
-                        text: "木蘭在黃河邊露營時，聽到了什麼聲音？",
+                        text: "木蘭在黃河邊紮營時，聽到了什麼聲音？",
                         options: ["爺孃喚女聲", "黃河流水鳴濺濺", "燕山胡騎鳴啾啾", "夥伴的呼嚕聲"],
                         correct: 1,
                         explanation: "「不聞爺孃喚女聲，但聞黃河流水鳴濺濺」，到了黃河邊已經聽不到父母的聲音，只剩下水流聲。"
@@ -407,7 +491,6 @@
                 id: 2, 
                 name: "黑山頭", 
                 x: 25, y: 30,
-                icon: "⛰️",
                 questions: [
                     {
                         text: "到了黑山頭，木蘭聽到了「燕山胡騎鳴啾啾」。這反映了什麼情境？",
@@ -427,7 +510,6 @@
                 id: 3, 
                 name: "匈奴戰場", 
                 x: 60, y: 15,
-                icon: "⚔️",
                 questions: [
                     {
                         text: "「將軍百戰死，壯士十年歸」使用了什麼修辭技巧？",
@@ -446,8 +528,7 @@
             { 
                 id: 4, 
                 name: "皇宮", 
-                x: 10, y: 60,
-                icon: "👑",
+                x: 25, y: 75,
                 questions: [
                     {
                         text: "天子問木蘭想要什麼賞賜，木蘭的回答是？",
@@ -467,7 +548,6 @@
                 id: 5, 
                 name: "花家 (歸來)", 
                 x: 80, y: 65,
-                icon: "🐇",
                 questions: [
                     {
                         text: "當木蘭回到家「脫我戰時袍，著我舊時裳」並出門看夥伴時，夥伴們的反應是什麼？",
@@ -487,7 +567,7 @@
 
         // --- 遊戲狀態 ---
         let currentStep = 0;
-        let currentQuestionIndex = 0; // 0 代表第一題, 1 代表第二題
+        let currentQuestionIndex = 0;
         let lives = 3;
 
         // --- DOM 元素 ---
@@ -517,9 +597,8 @@
         function initGame() {
             renderLocations();
             updateHeartsUI();
-            updateHeroPosition(0, true); // true 代表初始靜默放置，不觸發題目
+            updateHeroPosition(0, true); 
             
-            // 顯示影片並嘗試自動播放
             videoOverlay.classList.add('active');
             startModal.classList.remove('active');
             
@@ -531,38 +610,31 @@
                 });
             }
             
-            // 監聽影片播放與結束事件
             introVideo.onplay = () => playVideoBtnOverlay.classList.add('hidden');
             introVideo.onended = () => showStartModal();
         }
 
-        // 手動觸發影片播放
         function playIntroVideo() {
             playVideoBtnOverlay.classList.add('hidden');
             introVideo.play();
         }
 
-        // 跳過影片或影片結束後觸發，顯示開始旅程按鈕
         function skipVideo() {
             introVideo.pause();
             showStartModal();
         }
 
-        // 顯示開始旅程按鈕的 Modal
         function showStartModal() {
             videoOverlay.classList.remove('active');
             startModal.classList.add('active');
         }
 
-        // 開始旅程按鈕觸發
         function startGameFlow() {
-            // 喚醒 AudioContext，符合瀏覽器的音訊播放規定
             if (audioCtx.state === 'suspended') audioCtx.resume();
             
             startModal.classList.remove('active');
             
-            // 播放背景音樂
-            bgMusic.volume = 0.4; // 設定背景音量，避免太吵蓋過答題特效音
+            bgMusic.volume = 0.4; 
             bgMusic.play().then(() => {
                 isMusicPlaying = true;
                 musicToggleBtn.innerText = "🎵";
@@ -570,13 +642,11 @@
                 console.log("自動播放音樂被瀏覽器阻擋", err);
             });
 
-            // 開始問答第一關
             setTimeout(() => {
                 showQuestion(0, 0);
             }, 500);
         }
 
-        // 更新生命值 UI
         function updateHeartsUI() {
             const hearts = heartsContainer.querySelectorAll('.heart-icon');
             hearts.forEach((heart, index) => {
@@ -588,7 +658,6 @@
             });
         }
 
-        // 繪製地圖上的點
         function renderLocations() {
             locationsLayer.innerHTML = '';
             locations.forEach((loc, index) => {
@@ -605,30 +674,51 @@
             });
         }
 
-        // 更新主角位置
         function updateHeroPosition(stepIndex, isInit = false) {
             const loc = locations[stepIndex];
             heroToken.style.left = loc.x + '%';
             heroToken.style.top = loc.y + '%';
             
-            if (stepIndex === 0) heroToken.innerText = "👧"; 
-            else if (stepIndex >= 1 && stepIndex <= 3) heroToken.innerText = "🏇"; 
-            else if (stepIndex === 4) heroToken.innerText = "🙇"; 
-            else if (stepIndex === 5) heroToken.innerText = "🐫"; 
+            let imgSrc = "";
+            let fallbackChar = "";
+            
+            // 替換各階段的插畫圖片，並設定玉珮防呆字樣
+            if (stepIndex === 0) {
+                imgSrc = "木蘭_古典背影.png";
+                fallbackChar = "織";
+            } else if (stepIndex >= 1 && stepIndex <= 3) {
+                imgSrc = "木蘭_軍裝騎馬.png";
+                fallbackChar = "戰";
+            } else if (stepIndex === 4) {
+                imgSrc = "木蘭_拜見天子.png";
+                fallbackChar = "朝";
+            } else if (stepIndex === 5) {
+                imgSrc = "木蘭_軍裝騎駱駝.png";
+                fallbackChar = "歸";
+            }
+
+            // 動態載入圖片，若圖片不存在則顯示極具質感的「古典翡翠玉珮」
+            heroToken.innerHTML = `
+                <img src="${imgSrc}" 
+                     class="token-img" 
+                     alt="木蘭插畫" 
+                     onerror="this.outerHTML='<div class=\\'jade-token\\'>${fallbackChar}</div>'"
+                >
+            `;
 
             locationNameDisplay.innerText = loc.name;
 
             if (!isInit) {
-                // 移動動畫結束後觸發事件
+                playGallopSound();
+
                 if (stepIndex > 0 && stepIndex <= locations.length - 1) {
                     setTimeout(() => {
-                        showQuestion(stepIndex, 0); // 抵達新地點，顯示第一題
+                        showQuestion(stepIndex, 0);
                     }, 1600); 
                 }
             }
         }
 
-        // 顯示題目
         function showQuestion(stepIdx, qIdx) {
             currentStep = stepIdx;
             currentQuestionIndex = qIdx;
@@ -643,7 +733,6 @@
             const optionsDiv = document.getElementById('quiz-options');
             optionsDiv.innerHTML = '';
             
-            // 隱藏解說區
             feedbackArea.classList.add('hidden');
 
             qData.options.forEach((opt, i) => {
@@ -657,18 +746,16 @@
             quizModal.classList.add('active');
         }
 
-        // 檢查答案
         function checkAnswer(selected, correct, explanation, btnElement) {
             const allBtns = document.querySelectorAll('.option-btn');
             allBtns.forEach(b => {
                 b.disabled = true;
-                b.style.pointerEvents = 'none'; // 停用 hover 效果，防止再次點擊
+                b.style.pointerEvents = 'none'; 
             });
 
             const feedbackMsg = document.getElementById('feedback-msg');
             const feedbackExp = document.getElementById('feedback-explanation');
             
-            // 顯示正確答案的按鈕樣式
             allBtns[correct].classList.add('correct');
 
             if (selected === correct) {
@@ -681,15 +768,12 @@
                 feedbackMsg.innerText = "❌ 答錯了！";
                 feedbackMsg.className = "text-xl font-bold mb-2 text-red-600";
                 
-                // 扣除愛心
                 lives--;
                 updateHeartsUI();
             }
 
-            // 填入解說
             feedbackExp.innerText = explanation;
             
-            // 處理繼續按鈕的邏輯
             if (lives <= 0) {
                 nextActionBtn.innerText = "遊戲結束";
                 nextActionBtn.onclick = () => {
@@ -717,7 +801,6 @@
                 }
             }
 
-            // 顯示解說區塊
             feedbackArea.classList.remove('hidden');
         }
 
@@ -733,7 +816,6 @@
             createConfetti();
         }
 
-        // 控制音樂開關
         function toggleMusic() {
             if (isMusicPlaying) {
                 bgMusic.pause();
@@ -751,13 +833,11 @@
             lives = 3;
             updateHeartsUI();
             
-            // 停止並重置背景音樂與控制按鈕
             bgMusic.pause();
             bgMusic.currentTime = 0;
             isMusicPlaying = false;
             musicToggleBtn.innerText = "🔇";
             
-            // 重置影片時間與狀態
             introVideo.pause();
             introVideo.currentTime = 0;
             
@@ -767,7 +847,6 @@
             
             updateHeroPosition(0, true);
             
-            // 重置後顯示影片畫面，嘗試自動播放
             videoOverlay.classList.add('active');
             startModal.classList.remove('active');
             const playPromise = introVideo.play();
@@ -778,7 +857,6 @@
             }
         }
 
-        // 簡單的慶祝特效
         function createConfetti() {
             const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff'];
             for (let i = 0; i < 50; i++) {
@@ -793,7 +871,6 @@
             }
         }
 
-        // 啟動
         window.onload = initGame;
 
     </script>
