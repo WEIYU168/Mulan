@@ -120,7 +120,7 @@
             height: 100%;
             object-fit: cover;
             border-radius: 50%;
-            border: 6px solid #b8860b; /* 暗金色古典邊框 */
+            border: 6px solid #fff;
             box-shadow: 0 10px 20px rgba(0,0,0,0.5);
             background-color: #f3e5d8;
         }
@@ -131,7 +131,7 @@
             height: 100%;
             background: radial-gradient(circle at 30% 30%, #eef5e9, #b9d8c2, #7a9e85);
             border-radius: 50%;
-            border: 6px solid #b8860b;
+            border: 6px solid #fff;
             box-shadow: 0 10px 20px rgba(0,0,0,0.5), inset 0 0 15px rgba(255,255,255,0.7);
             display: flex;
             justify-content: center;
@@ -227,6 +227,11 @@
             position: relative;
         }
 
+        #quiz-question {
+            text-align: left;
+            line-height: 1.7;
+        }
+
         .option-btn {
             display: block;
             width: 100%;
@@ -239,6 +244,8 @@
             transition: all 0.2s;
             font-size: 1.1rem;
             color: #444;
+            text-align: left;
+            line-height: 1.5;
         }
 
         .option-btn:hover {
@@ -875,14 +882,7 @@
                 fallbackChar = "歸";
             }
 
-            // 動態載入圖片，若圖片不存在則顯示極具質感的「古典翡翠玉珮」
-            heroToken.innerHTML = `
-                <img src="${imgSrc}" 
-                     class="token-img" 
-                     alt="木蘭插畫" 
-                     onerror="this.outerHTML='<div class=\\'jade-token\\'>${fallbackChar}</div>'"
-                >
-            `;
+            updateHeroImage(imgSrc, fallbackChar);
 
             locationNameDisplay.innerText = loc.name;
 
@@ -895,6 +895,39 @@
                     }, 1600); 
                 }
             }
+        }
+
+        function createHeroFallback(fallbackChar) {
+            const fallback = document.createElement('div');
+            fallback.className = 'jade-token';
+            fallback.innerText = fallbackChar;
+            return fallback;
+        }
+
+        function updateHeroImage(imgSrc, fallbackChar) {
+            if (heroToken.dataset.currentSrc === imgSrc && heroToken.querySelector('.token-img')) return;
+
+            if (!heroToken.firstElementChild) {
+                heroToken.replaceChildren(createHeroFallback(fallbackChar));
+            }
+
+            heroToken.dataset.pendingSrc = imgSrc;
+
+            const nextImg = new Image();
+            nextImg.className = 'token-img';
+            nextImg.alt = '木蘭插畫';
+            nextImg.decoding = 'async';
+            nextImg.onload = () => {
+                if (heroToken.dataset.pendingSrc !== imgSrc) return;
+                heroToken.replaceChildren(nextImg);
+                heroToken.dataset.currentSrc = imgSrc;
+            };
+            nextImg.onerror = () => {
+                if (heroToken.dataset.pendingSrc !== imgSrc) return;
+                heroToken.replaceChildren(createHeroFallback(fallbackChar));
+                heroToken.dataset.currentSrc = '';
+            };
+            nextImg.src = imgSrc;
         }
 
         function showQuestion(stepIdx, qIdx) {
